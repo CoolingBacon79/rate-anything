@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
+import './index.css';
 
 export default function MainApp({ user }) {
   const [items, setItems] = useState([])
