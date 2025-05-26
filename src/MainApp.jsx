@@ -307,9 +307,22 @@ export default function MainApp({ user }) {
               </div>
             )}
 
-            <strong onClick={() => setSelectedItem(i)} style={{ userSelect: 'none' }}>
-              {i.name}
-            </strong>
+<strong
+  onClick={() => setSelectedItem(i)}
+  style={{
+    userSelect: 'none',
+    fontSize: '1.1rem',
+    color: '#333',
+    display: 'block',
+    marginTop: '0.5rem',
+    whiteSpace: 'normal',
+    overflowWrap: 'break-word',
+    wordBreak: 'break-word',
+  }}
+>
+  {i.name}
+</strong>
+
             <br />
             <ScoreBox score={i.average} />
           </li>
