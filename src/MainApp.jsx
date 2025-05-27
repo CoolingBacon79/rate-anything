@@ -1,3 +1,4 @@
+// src/MainApp.jsx
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import './index.css'
@@ -11,6 +12,7 @@ export default function MainApp({ user, onSignOut }) {
   const [score, setScore] = useState('50')
   const [uploadingItemId, setUploadingItemId] = useState(null)
 
+  // Fetch items + ratings once
   useEffect(() => {
     fetchItems()
   }, [])
@@ -18,26 +20,31 @@ export default function MainApp({ user, onSignOut }) {
   async function fetchItems() {
     const { data, error } = await supabase
       .from('items')
-      .select('id, name, image_url, ratings(score)')
+      .select(`id, name, image_url, ratings(user_id, score)`)
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching items:', error.message)
+      console.error(error.message)
       return
     }
 
-    const withAvg = data.map((i) => {
-      const scores = i.ratings.map((r) => r.score)
-      const average = scores.length
-        ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
-        : 'No ratings'
-      return { ...i, average }
+    const stats = data.map(item => {
+      const allScores = item.ratings.map(r => r.score)
+      const count     = allScores.length
+      const average   = count
+        ? Math.round(allScores.reduce((a,b)=>a+b,0)/count)
+        : null
+      const userRating = user
+        ? item.ratings.find(r => r.user_id === user.id)?.score ?? null
+        : null
+      return { ...item, average, count, userRating }
     })
 
-    setItems(withAvg)
+    setItems(stats)
   }
 
-  const addItem = async (e) => {
+  // Add new item + optional image
+  const addItem = async e => {
     e.preventDefault()
     if (!newItemName.trim()) return
 
@@ -45,21 +52,20 @@ export default function MainApp({ user, onSignOut }) {
     let imageUrl = ''
 
     if (newItemImage) {
-      const fileExt = newItemImage.name.split('.').pop()
-      const fileName = `${Date.now()}.${fileExt}`
-      const { error: uploadError } = await supabase.storage
+      const ext      = newItemImage.name.split('.').pop()
+      const fileName = `${Date.now()}.${ext}`
+      const { error: uploadError } = await supabase
+        .storage
         .from('item-images')
         .upload(fileName, newItemImage)
-
-      if (uploadError) {
-        console.error('Image upload failed:', uploadError.message)
-      } else {
-        const { data: publicUrlData } = supabase
+      if (!uploadError) {
+        const { data } = supabase
           .storage
           .from('item-images')
           .getPublicUrl(fileName)
-
-        imageUrl = publicUrlData.publicUrl
+        imageUrl = data.publicUrl
+      } else {
+        console.error(uploadError.message)
       }
     }
 
@@ -67,125 +73,102 @@ export default function MainApp({ user, onSignOut }) {
       .from('items')
       .insert([{ name: newItemName, image_url: imageUrl }])
       .select()
-
     setLoading(false)
 
     if (error) {
-      console.error('Error adding item:', error.message)
-      return
-    }
-
-    setItems([data[0], ...items])
-    setNewItemName('')
-    setNewItemImage(null)
-  }
-
-  const uploadImageForItem = async (itemId, file) => {
-    if (!file) return
-    setUploadingItemId(itemId)
-
-    const fileExt = file.name.split('.').pop()
-    const fileName = `item-${itemId}-${Date.now()}.${fileExt}`
-
-    const { error: uploadError } = await supabase.storage
-      .from('item-images')
-      .upload(fileName, file)
-
-    if (uploadError) {
-      console.error('Error uploading image:', uploadError.message)
-      setUploadingItemId(null)
-      return
-    }
-
-    const { data: publicUrlData } = supabase.storage
-      .from('item-images')
-      .getPublicUrl(fileName)
-
-    const { error: updateError } = await supabase
-      .from('items')
-      .update({ image_url: publicUrlData.publicUrl })
-      .eq('id', itemId)
-
-    if (updateError) {
-      console.error('Error updating item image_url:', updateError.message)
+      console.error(error.message)
     } else {
-      fetchItems()
+      setItems([
+        ...items,
+        {
+          id: data[0].id,
+          name: data[0].name,
+          image_url: data[0].image_url,
+          average: null,
+          count: 0,
+          userRating: null
+        }
+      ])
+      setNewItemName('')
+      setNewItemImage(null)
     }
-
-    setUploadingItemId(null)
   }
 
-  const handleSelectItem = async (item) => {
-    setSelectedItem(item)
-
-    if (!user?.id) {
-      setScore('50')
+  // Open rating modal (only for logged-in)
+  const openRating = item => {
+    if (!user) {
+      alert('Du måste vara inloggad för att betygsätta.')
       return
     }
-
-    const { data, error } = await supabase
-      .from('ratings')
-      .select('score')
-      .eq('item_id', item.id)
-      .eq('user_id', user.id)
-      .single()
-
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching user score:', error.message)
-    }
-
-    setScore(data?.score?.toString() ?? '50')
+    setSelectedItem(item)
+    setScore(item.userRating != null ? item.userRating.toString() : '50')
   }
 
+  // Submit or update rating
   const submitRating = async () => {
-    const numericScore = Number(score)
-    if (!user?.id) return alert('You must be signed in to rate.')
-    if (!selectedItem?.id) return alert('Please select an item.')
-    if (!score || isNaN(numericScore) || numericScore < 0 || numericScore > 100)
-      return alert('Score must be between 0–100.')
-
+    const numeric = Number(score)
+    if (!selectedItem) return
+    if (isNaN(numeric) || numeric < 0 || numeric > 100) {
+      alert('Score måste vara 0–100.')
+      return
+    }
     const { error } = await supabase
       .from('ratings')
       .upsert(
-        { item_id: selectedItem.id, user_id: user.id, score: numericScore },
-        { onConflict: ['user_id', 'item_id'] }
+        { item_id: selectedItem.id, user_id: user.id, score: numeric },
+        { onConflict: ['user_id','item_id'] }
       )
-
     if (error) {
-      console.error('Error submitting rating:', error.message)
-      alert('Failed to submit rating.')
+      console.error(error.message)
+      alert('Kunde inte spara betyg.')
     } else {
-      fetchItems()
+      await fetchItems()
       setSelectedItem(null)
       setScore('50')
     }
   }
 
-  function ScoreBox({ score }) {
-    if (score === 'No ratings') {
-      return <span style={{ color: '#888' }}>No ratings</span>
+  // Large community average box
+  const AvgBox = ({ avg }) => {
+    const text = avg == null ? '—' : avg
+    let bg = '#ddd'
+    if (avg != null) {
+      if (avg >= 70) bg = '#4caf50'
+      else if (avg >= 40) bg = '#ffc107'
+      else bg = '#f44336'
     }
-
-    let bgColor = ''
-    if (score >= 70) bgColor = '#4caf50'
-    else if (score >= 40) bgColor = '#ffc107'
-    else bgColor = '#f44336'
-
     return (
-      <div
-        style={{
-          display: 'inline-block',
-          backgroundColor: bgColor,
-          color: '#000',
-          borderRadius: '6px',
-          padding: '0.25rem 0.5rem',
-          fontWeight: 'bold',
-          minWidth: '40px',
-          userSelect: 'none',
-          marginTop: '0.5rem'
-        }}
-      >
-        {score}
+      <div style={{
+        backgroundColor: bg,
+        color: '#000',
+        borderRadius: '8px',
+        padding: '0.5rem',
+        fontSize: '1.2rem',
+        fontWeight: 'bold',
+        textAlign: 'center',
+        width: '60px',
+        margin: '0.5rem auto 0 auto',
+      }}>
+        {text}
+      </div>
+    )
+  }
+
+  // Smaller personal score box
+  const YouBox = ({ your }) => {
+    if (your == null) return null
+    return (
+      <div style={{
+        backgroundColor: '#eee',
+        color: '#000',
+        borderRadius: '6px',
+        padding: '0.25rem 0.5rem',
+        fontSize: '0.9rem',
+        textAlign: 'center',
+        width: '50px',
+        margin: '0.25rem auto 0 auto',
+      }}>
+        {your}
       </div>
     )
   }
@@ -196,8 +179,6 @@ export default function MainApp({ user, onSignOut }) {
       fontFamily: 'sans-serif',
       background: '#fffbea',
       minHeight: '100vh',
-      width: '100vw',
-      maxWidth: '100vw',
       boxSizing: 'border-box',
     }}>
       {user && (
@@ -209,8 +190,7 @@ export default function MainApp({ user, onSignOut }) {
               backgroundColor: '#ffc107',
               border: 'none',
               borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
+              cursor: 'pointer'
             }}
           >
             Sign Out
@@ -220,146 +200,131 @@ export default function MainApp({ user, onSignOut }) {
 
       <h1 style={{ color: '#ffc107' }}>🌟 Rate Anything</h1>
 
-      <form onSubmit={addItem} style={{ marginBottom: '1.5rem' }}>
-        <input
-          value={newItemName}
-          onChange={(e) => setNewItemName(e.target.value)}
-          placeholder="New item"
-          style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid #ccc' }}
-        />
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => setNewItemImage(e.target.files[0])}
-          style={{ marginLeft: '0.5rem' }}
-        />
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            marginLeft: '.5rem',
-            padding: '0.5rem 1rem',
-            backgroundColor: '#ffc107',
-            border: 'none',
-            borderRadius: '6px',
-            color: '#000',
-            cursor: 'pointer'
-          }}
-        >
-          {loading ? 'Adding…' : 'Add Item'}
-        </button>
-      </form>
-
-      {selectedItem && (
-        <div style={{ marginBottom: '2rem', padding: '1rem', background: '#fff3cd', borderRadius: '10px' }}>
-          <h3>Rate: {selectedItem.name}</h3>
+      {/* Add Item form only for logged-in */}
+      {user && (
+        <form onSubmit={addItem} style={{ margin: '1rem 0' }}>
           <input
-            type="number"
-            min="1"
-            max="100"
-            value={score}
-            onChange={(e) => setScore(e.target.value)}
-            style={{ marginRight: '1rem', padding: '0.5rem', width: '80px' }}
+            value={newItemName}
+            onChange={e => setNewItemName(e.target.value)}
+            placeholder="New item"
+            style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid #ccc' }}
+          />
+          <input
+            type="file"
+            accept="image/*"
+            onChange={e => setNewItemImage(e.target.files[0])}
+            style={{ marginLeft: '0.5rem' }}
           />
           <button
-            onClick={submitRating}
+            type="submit"
+            disabled={loading}
             style={{
+              marginLeft: '.5rem',
               padding: '0.5rem 1rem',
-              backgroundColor: '#ffd54f',
+              backgroundColor: '#ffc107',
               border: 'none',
               borderRadius: '6px',
               cursor: 'pointer'
             }}
           >
-            Submit Rating
+            {loading ? 'Adding…' : 'Add Item'}
           </button>
-          <button
-            onClick={() => setSelectedItem(null)}
-            style={{
-              marginLeft: '1rem',
-              padding: '0.5rem 1rem',
-              backgroundColor: '#eee',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer'
-            }}
-          >
-            Cancel
-          </button>
-        </div>
+        </form>
       )}
 
+      {/* Always-visible item grid */}
       <ul style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))',
         gap: '1rem',
         padding: 0,
         listStyle: 'none'
       }}>
-        {items.map((i) => (
-          <li key={i.id} style={{
+        {items.map(item => (
+          <li key={item.id} style={{
             background: 'white',
             borderRadius: '10px',
             padding: '1rem',
             boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
-            textAlign: 'center',
-            cursor: 'pointer',
-            position: 'relative'
+            textAlign: 'center'
           }}>
-            {i.image_url ? (
-              <img
-                src={i.image_url}
-                alt={i.name}
-                style={{ width: '100%', height: '150px', objectFit: 'cover', borderRadius: '6px', marginBottom: '0.5rem' }}
-                onClick={() => handleSelectItem(i)}
-              />
-            ) : (
-              <div style={{ marginBottom: '0.5rem' }}>
-                <label
-                  htmlFor={`upload-${i.id}`}
-                  style={{
-                    display: 'inline-block',
-                    padding: '0.5rem 1rem',
-                    backgroundColor: '#ffc107',
-                    color: '#000',
+            <div onClick={() => openRating(item)} style={{ cursor: 'pointer' }}>
+              {item.image_url
+                ? <img
+                    src={item.image_url}
+                    alt={item.name}
+                    style={{
+                      width: '100%',
+                      aspectRatio: '1/1',
+                      objectFit: 'cover',
+                      borderRadius: '6px',
+                      marginBottom: '0.5rem'
+                    }}
+                  />
+                : <div style={{
+                    width: '100%',
+                    aspectRatio: '1/1',
+                    background: '#eee',
                     borderRadius: '6px',
-                    cursor: uploadingItemId === i.id ? 'wait' : 'pointer'
-                  }}
-                >
-                  {uploadingItemId === i.id ? 'Uploading...' : 'Add Image'}
-                </label>
-                <input
-                  type="file"
-                  id={`upload-${i.id}`}
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                  disabled={uploadingItemId === i.id}
-                  onChange={(e) => uploadImageForItem(i.id, e.target.files[0])}
-                />
-              </div>
-            )}
+                    marginBottom: '0.5rem'
+                  }} />
+              }
+              <strong style={{ display: 'block', marginBottom: '0.75rem' }}>
+                {item.name}
+              </strong>
+            </div>
 
-            <strong
-              onClick={() => handleSelectItem(i)}
-              style={{
-                userSelect: 'none',
-                fontSize: '1.1rem',
-                color: '#333',
-                display: 'block',
-                marginTop: '0.5rem',
-                whiteSpace: 'normal',
-                overflowWrap: 'break-word',
-                wordBreak: 'break-word',
-              }}
-            >
-              {i.name}
-            </strong>
-
-            <br />
-            <ScoreBox score={i.average} />
+            <AvgBox avg={item.average} />
+            <YouBox your={item.userRating} />
+            <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.5rem' }}>
+              {item.count} ratings
+            </div>
           </li>
         ))}
       </ul>
+
+      {/* Rating modal only for logged-in */}
+      {selectedItem && user && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.3)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <div style={{
+            background: 'white',
+            padding: '2rem',
+            borderRadius: '10px',
+            width: '300px'
+          }}>
+            <h3 style={{ marginTop: 0 }}>Rate {selectedItem.name}</h3>
+            <input
+              type="number" min="0" max="100"
+              value={score}
+              onChange={e => setScore(e.target.value)}
+              style={{ padding: '0.5rem', width: '80px', marginRight: '1rem' }}
+            />
+            <button onClick={submitRating} style={{
+              padding: '0.5rem 1rem',
+              backgroundColor: '#ffc107',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer'
+            }}>
+              Submit
+            </button>
+            <button onClick={() => setSelectedItem(null)} style={{
+              marginLeft: '1rem',
+              padding: '0.5rem 1rem',
+              backgroundColor: '#ddd',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer'
+            }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
