@@ -4,10 +4,10 @@ import { supabase } from './supabaseClient'
 import './index.css'
 
 export default function MainApp({ user, onSignOut }) {
-  const [items, setItems] = useState([])
-  const [newItemName, setNewItemName] = useState('')
+  const [items, setItems]         = useState([])
+  const [newItemName, setNewItemName]   = useState('')
   const [newItemImage, setNewItemImage] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading]     = useState(false)
   const [inlineScores, setInlineScores] = useState({})
   const [editingId, setEditingId] = useState(null)
   const [uploadingId, setUploadingId] = useState(null)
@@ -21,7 +21,6 @@ export default function MainApp({ user, onSignOut }) {
       .from('items')
       .select(`id, name, image_url, ratings(user_id, score)`)
       .order('created_at', { ascending: false })
-
     if (error) return console.error(error.message)
 
     const stats = data.map(item => {
@@ -36,9 +35,7 @@ export default function MainApp({ user, onSignOut }) {
 
     setItems(stats)
     const init = {}
-    stats.forEach(i => {
-      if (i.userRating != null) init[i.id] = i.userRating.toString()
-    })
+    stats.forEach(i => { if (i.userRating!=null) init[i.id] = i.userRating.toString() })
     setInlineScores(init)
   }
 
@@ -85,7 +82,6 @@ export default function MainApp({ user, onSignOut }) {
     setUploadingId(itemId)
     const ext = file.name.split('.').pop()
     const fileName = `item-${itemId}-${Date.now()}.${ext}`
-
     const { error: upErr } = await supabase
       .storage.from('item-images').upload(fileName, file)
     if (!upErr) {
@@ -128,206 +124,99 @@ export default function MainApp({ user, onSignOut }) {
   }
 
   const AvgBox = ({ avg }) => {
-    const txt = avg == null ? '—' : avg
-    let bg = '#ddd'
-    if (avg != null) bg = avg >= 70 ? '#4caf50' : avg >= 40 ? '#ffc107' : '#f44336'
-    return (
-      <div style={{
-        backgroundColor: bg,
-        color: '#000',
-        borderRadius: '8px',
-        padding: '0.5rem',
-        fontSize: '1.2rem',
-        fontWeight: 'bold',
-        textAlign: 'center',
-        width: '60px',
-        margin: '0.5rem auto 0'
-      }}>
-        {txt}
-      </div>
-    )
+  const text = avg == null ? '—' : avg
+  let bg = '#ddd'
+  if (avg != null) {
+    bg = avg >= 70
+      ? '#4caf50'
+      : avg >= 40
+        ? '#ffc107'
+        : '#f44336'
   }
+  return (
+    <div
+      className="avg-box"
+      style={{ backgroundColor: bg }}   // <-- override CSS bg here
+    >
+      {text}
+    </div>
+  )
+}
 
   return (
-    <div style={{
-      padding:'2rem',
-      fontFamily:'sans-serif',
-      background:'#fffbea',
-      minHeight:'100vh'
-    }}>
+    <div className="main-app">
       {user && (
-        <div style={{ textAlign:'right', marginBottom:'1rem' }}>
-          <button onClick={onSignOut} style={{
-            padding:'0.5rem 1rem',
-            backgroundColor:'#ffc107',
-            border:'none',
-            borderRadius:'6px',
-            cursor:'pointer'
-          }}>
-            Sign Out
-          </button>
+        <div className="sign-out">
+          <button onClick={onSignOut}>Sign Out</button>
         </div>
       )}
 
-      <h1 style={{ color:'#ffc107' }}>🌟 Rate Anything</h1>
+      <h1 className="title">🌟 Rate Anything</h1>
 
       {user && (
-        <form onSubmit={addItem} style={{ margin:'1rem 0' }}>
+        <form className="add-item-form" onSubmit={addItem}>
           <input
             value={newItemName}
             onChange={e=>setNewItemName(e.target.value)}
             placeholder="New item"
-            style={{ padding:'0.5rem',borderRadius:'6px',border:'1px solid #ccc' }}
           />
           <input
             type="file"
             accept="image/*"
             onChange={e=>setNewItemImage(e.target.files[0])}
-            style={{ marginLeft:'0.5rem' }}
           />
-          <button type="submit" disabled={loading} style={{
-            marginLeft:'.5rem',
-            padding:'0.5rem 1rem',
-            backgroundColor:'#ffc107',
-            border:'none',
-            borderRadius:'6px',
-            cursor:'pointer'
-          }}>
-            {loading?'Adding…':'Add Item'}
+          <button type="submit" disabled={loading}>
+            {loading ? 'Adding…' : 'Add Item'}
           </button>
         </form>
       )}
 
-      <ul style={{
-        display:'grid',
-        gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',
-        gap:'1rem',
-        listStyle:'none',
-        padding:0
-      }}>
+      <ul className="item-grid">
         {items.map(item => (
-          <li key={item.id} style={{
-            background:'white',
-            borderRadius:'10px',
-            padding:'1rem',
-            boxShadow:'0 2px 6px rgba(0,0,0,0.1)',
-            textAlign:'center'
-          }}>
+          <li key={item.id} className="item-card">
             {item.image_url ? (
-              <img
-                src={item.image_url}
-                alt={item.name}
-                style={{
-                  width:'100%',
-                  aspectRatio:'1/1',
-                  objectFit:'cover',
-                  borderRadius:'6px',
-                  marginBottom:'0.5rem'
-                }}
-              />
+              <img src={item.image_url} alt={item.name} />
             ) : (
-              <div style={{
-                position: 'relative',
-                width:'100%',
-                aspectRatio:'1/1',
-                background:'#eee',
-                borderRadius:'6px',
-                marginBottom:'0.5rem'
-              }}>
-                <label
-                  htmlFor={`upload-${item.id}`}
-                  style={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%,-50%)',
-                    padding:'0.5rem 1rem',
-                    backgroundColor:'#ffc107',
-                    color:'#000',
-                    borderRadius:'6px',
-                    cursor: uploadingId===item.id ? 'wait' : 'pointer'
-                  }}
-                >
-                  {uploadingId===item.id?'Uploading…':'Add Image'}
+              <div className="placeholder">
+                <label htmlFor={`upload-${item.id}`}>
+                  {uploadingId===item.id ? 'Uploading…' : 'Add Image'}
                 </label>
                 <input
                   id={`upload-${item.id}`}
                   type="file"
                   accept="image/*"
-                  style={{ display:'none' }}
                   disabled={uploadingId===item.id}
                   onChange={e=>uploadImageForItem(item.id,e.target.files[0])}
                 />
               </div>
             )}
 
-            <strong style={{
-              color:'#000',
-              fontSize:'1rem',
-              whiteSpace:'normal',
-              overflowWrap:'break-word',
-              display:'block',
-              marginBottom:'0.5rem'
-            }}>
-              {item.name}
-            </strong>
+            <strong className="item-name">{item.name}</strong>
 
             <AvgBox avg={item.average} />
 
             {user && (
               editingId === item.id ? (
-                <div style={{ marginTop:'0.5rem' }}>
+                <div className="inline-edit">
                   <input
-                    type="number" min="0" max="100"
+                    type="number"
+                    min="0" max="100"
                     value={inlineScores[item.id]||''}
                     onChange={e=>setInlineScores(s=>({...s,[item.id]:e.target.value}))}
-                    style={{
-                      width:'50px',
-                      padding:'0.25rem',
-                      textAlign:'center',
-                      background:'#fff',
-                      border:'1px solid #ccc',
-                      borderRadius:'6px'
-                    }}
                   />
-                  <button
-                    onClick={()=>submitRating(item.id)}
-                    style={{
-                      marginLeft:'0.5rem',
-                      padding:'0.3rem .6rem',
-                      backgroundColor:'#ffc107',
-                      border:'none',
-                      borderRadius:'6px',
-                      cursor:'pointer'
-                    }}
-                  >
-                    Submit
-                  </button>
+                  <button onClick={()=>submitRating(item.id)}>Submit</button>
                 </div>
               ) : (
                 <div
+                  className="you-box"
                   onClick={()=>startEdit(item.id)}
-                  style={{
-                    background:'#eee',
-                    padding:'0.5rem',
-                    borderRadius:'6px',
-                    width:'50px',
-                    margin:'0.5rem auto 0',
-                    cursor:'pointer'
-                  }}
                 >
                   {item.userRating!=null ? item.userRating : 'You'}
                 </div>
               )
             )}
 
-            <div style={{
-              fontSize:'0.8rem',
-              color:'#666',
-              marginTop:'0.5rem'
-            }}>
-              {item.count} ratings
-            </div>
+            <div className="count">{item.count} ratings</div>
           </li>
         ))}
       </ul>

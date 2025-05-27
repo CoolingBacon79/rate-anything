@@ -99,3 +99,182 @@ html, body, #root {
   height: 100%;
 }
 
+/* Grid layout: desktop auto-fill, mobile 2 columns centered */
+.item-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  justify-content: center;
+  padding: 0;
+  list-style: none;
+}
+@media (max-width: 600px) {
+  .item-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Card styling */
+.item-card {
+  background: white;
+  border-radius: 10px;
+  padding: 1rem;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  text-align: center;
+}
+
+/* Placeholder for missing image */
+.placeholder {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1/1;
+  background: #eee;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+}
+.placeholder label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 0.5rem 1rem;
+  background: #ffc107;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.placeholder input {
+  display: none;
+}
+
+/* Image square */
+.item-card img {
+  width: 100%;
+  aspect-ratio: 1/1;
+  object-fit: cover;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+}
+
+/* Item name */
+.item-name {
+  color: #000;
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+  display: block;
+  word-break: break-word;
+}
+
+/* Community average box */
+.avg-box {
+  color: #000;
+  border-radius: 8px;
+  padding: 0.5rem;
+  font-size: 1.2rem;
+  font-weight: bold;
+  text-align: center;
+  width: 60px;
+  margin: 0.5rem auto 0;
+}
+
+/* Inline edit */
+.inline-edit {
+  margin-top: 0.5rem;
+}
+.inline-edit input {
+  width: 50px;
+  padding: 0.25rem;
+  text-align: center;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+.inline-edit button {
+  margin-left: 0.5rem;
+  padding: 0.3rem 0.6rem;
+  background: #ffc107;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* “You” box */
+.you-box {
+  background: #eee;
+  padding: 0.5rem;
+  border-radius: 6px;
+  width: 50px;
+  margin: 0.5rem auto 0;
+  cursor: pointer;
+}
+
+/* Ratings count */
+.count {
+  font-size: 0.8rem;
+  color: #666;
+  margin-top: 0.5rem;
+}
+
+/* Sign-out button area */
+.sign-out {
+  
+  text-align: right;
+  margin-bottom: 1rem;
+}
+.sign-out button {
+  padding: 0.5rem 1rem;
+  background-color: #ffc107;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* Title */
+.title {
+  color: #ffc107;
+    text-align: center;
+}
+
+/* Add-item form */
+
+.add-item-form {
+  display: flex;
+  flex-wrap: wrap;        /* allow children to wrap */
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;            /* consistent spacing */
+  margin: 1rem auto;
+}
+.add-item-form input:first-child {
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+.add-item-form input[type="file"] {
+  margin-left: 0.5rem;
+}
+.add-item-form button {
+  margin-left: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: #ffc107;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.add-item-form input[type="text"] {
+  flex: 1 1 150px;        /* grow, shrink, minimum 150px */
+  min-width: 0;           /* allow shrinking below intrinsic size */
+}
+.add-item-form input[type="file"],
+.add-item-form button {
+  flex: 0 0 auto;         /* fixed size, but will wrap */
+}
+@media (max-width: 500px) {
+  .add-item-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .add-item-form input,
+  .add-item-form button {
+    width: 100%;
+  }
+}
