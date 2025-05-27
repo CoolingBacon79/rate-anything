@@ -1,19 +1,19 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
-import './index.css';
+import './index.css'
 
-export default function MainApp({ user }) {
+export default function MainApp({ user, onSignOut }) {
   const [items, setItems] = useState([])
   const [newItemName, setNewItemName] = useState('')
   const [newItemImage, setNewItemImage] = useState(null)
   const [loading, setLoading] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
   const [score, setScore] = useState(50)
-  const [uploadingItemId, setUploadingItemId] = useState(null) // for existing image uploads
+  const [uploadingItemId, setUploadingItemId] = useState(null)
 
   useEffect(() => {
-    if (user) fetchItems()
-  }, [user])
+    fetchItems()
+  }, [])
 
   async function fetchItems() {
     const { data, error } = await supabase
@@ -37,7 +37,6 @@ export default function MainApp({ user }) {
     setItems(withAvg)
   }
 
-  // Add new item with optional image
   const addItem = async (e) => {
     e.preventDefault()
     if (!newItemName.trim()) return
@@ -81,7 +80,6 @@ export default function MainApp({ user }) {
     setNewItemImage(null)
   }
 
-  // Upload image for an existing item WITHOUT image
   const uploadImageForItem = async (itemId, file) => {
     if (!file) return
     setUploadingItemId(itemId)
@@ -103,7 +101,6 @@ export default function MainApp({ user }) {
       .from('item-images')
       .getPublicUrl(fileName)
 
-    // Update item with new image_url
     const { error: updateError } = await supabase
       .from('items')
       .update({ image_url: publicUrlData.publicUrl })
@@ -119,9 +116,9 @@ export default function MainApp({ user }) {
   }
 
   const submitRating = async () => {
+    if (!user?.id) return alert('You must be signed in to rate.')
     if (!selectedItem?.id) return alert('Please select an item.')
-    if (score < 1 || score > 100) return alert('Score must be 1–100.')
-    if (!user?.id) return alert('You must be signed in.')
+    if (score < 0 || score > 100) return alert('Score must be 0–100.')
 
     const { error } = await supabase
       .from('ratings')
@@ -139,16 +136,15 @@ export default function MainApp({ user }) {
     }
   }
 
-  // Funktion för att skapa score-box med färg beroende på värdet
   function ScoreBox({ score }) {
     if (score === 'No ratings') {
       return <span style={{ color: '#888' }}>No ratings</span>
     }
 
     let bgColor = ''
-    if (score >= 70) bgColor = '#4caf50' // grönt
-    else if (score >= 40) bgColor = '#ffc107' // gult (samma gul som tema)
-    else bgColor = '#f44336' // rött
+    if (score >= 70) bgColor = '#4caf50'
+    else if (score >= 40) bgColor = '#ffc107'
+    else bgColor = '#f44336'
 
     return (
       <div
@@ -181,6 +177,24 @@ export default function MainApp({ user }) {
         boxSizing: 'border-box',
       }}
     >
+      {user && (
+        <div style={{ textAlign: 'right', marginBottom: '1rem' }}>
+          <button
+            onClick={onSignOut}
+            style={{
+              padding: '0.5rem 1rem',
+              backgroundColor: '#ffc107',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+            }}
+          >
+            Sign Out
+          </button>
+        </div>
+      )}
+
       <h1 style={{ color: '#ffc107' }}>🌟 Rate Anything</h1>
 
       <form onSubmit={addItem} style={{ marginBottom: '1.5rem' }}>
@@ -307,21 +321,21 @@ export default function MainApp({ user }) {
               </div>
             )}
 
-<strong
-  onClick={() => setSelectedItem(i)}
-  style={{
-    userSelect: 'none',
-    fontSize: '1.1rem',
-    color: '#333',
-    display: 'block',
-    marginTop: '0.5rem',
-    whiteSpace: 'normal',
-    overflowWrap: 'break-word',
-    wordBreak: 'break-word',
-  }}
->
-  {i.name}
-</strong>
+            <strong
+              onClick={() => setSelectedItem(i)}
+              style={{
+                userSelect: 'none',
+                fontSize: '1.1rem',
+                color: '#333',
+                display: 'block',
+                marginTop: '0.5rem',
+                whiteSpace: 'normal',
+                overflowWrap: 'break-word',
+                wordBreak: 'break-word',
+              }}
+            >
+              {i.name}
+            </strong>
 
             <br />
             <ScoreBox score={i.average} />
