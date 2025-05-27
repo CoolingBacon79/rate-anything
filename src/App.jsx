@@ -5,28 +5,43 @@ import MainApp from './MainApp'
 
 export default function App() {
   const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
+      setLoading(false)
     })
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+    // Lyssna på auth-ändringar
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
     })
 
-    return () => subscription?.unsubscribe()
+    // Viktigt: Avsluta prenumerationen korrekt
+    return () => {
+      listener.subscription?.unsubscribe()
+    }
   }, [])
 
   const signOut = async () => {
-    await supabase.auth.signOut()
-    setUser(null)
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      console.error('Sign out error:', error.message)
+    } else {
+      setUser(null)
+    }
   }
 
-  return (
-    <div>
-      {!user && <Auth onUser={setUser} />}
-      <MainApp user={user} onSignOut={signOut} />
-    </div>
-  )
+  if (loading) {
+  return <div style={{ background: 'yellow', height: '100vh' }}>Loading...</div>
+}
+
+if (!user) {
+  return <Auth onUser={setUser} />
+}
+
+return <MainApp user={user} onSignOut={signOut} />
+
 }

@@ -8,7 +8,7 @@ export default function MainApp({ user, onSignOut }) {
   const [newItemImage, setNewItemImage] = useState(null)
   const [loading, setLoading] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
-  const [score, setScore] = useState(50)
+  const [score, setScore] = useState('50')
   const [uploadingItemId, setUploadingItemId] = useState(null)
 
   useEffect(() => {
@@ -115,15 +115,39 @@ export default function MainApp({ user, onSignOut }) {
     setUploadingItemId(null)
   }
 
+  const handleSelectItem = async (item) => {
+    setSelectedItem(item)
+
+    if (!user?.id) {
+      setScore('50')
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('ratings')
+      .select('score')
+      .eq('item_id', item.id)
+      .eq('user_id', user.id)
+      .single()
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error fetching user score:', error.message)
+    }
+
+    setScore(data?.score?.toString() ?? '50')
+  }
+
   const submitRating = async () => {
+    const numericScore = Number(score)
     if (!user?.id) return alert('You must be signed in to rate.')
     if (!selectedItem?.id) return alert('Please select an item.')
-    if (score < 0 || score > 100) return alert('Score must be 0–100.')
+    if (!score || isNaN(numericScore) || numericScore < 0 || numericScore > 100)
+      return alert('Score must be between 0–100.')
 
     const { error } = await supabase
       .from('ratings')
       .upsert(
-        { item_id: selectedItem.id, user_id: user.id, score },
+        { item_id: selectedItem.id, user_id: user.id, score: numericScore },
         { onConflict: ['user_id', 'item_id'] }
       )
 
@@ -133,6 +157,7 @@ export default function MainApp({ user, onSignOut }) {
     } else {
       fetchItems()
       setSelectedItem(null)
+      setScore('50')
     }
   }
 
@@ -166,17 +191,15 @@ export default function MainApp({ user, onSignOut }) {
   }
 
   return (
-    <div
-      style={{
-        padding: '2rem',
-        fontFamily: 'sans-serif',
-        background: '#fffbea',
-        minHeight: '100vh',
-        width: '100vw',
-        maxWidth: '100vw',
-        boxSizing: 'border-box',
-      }}
-    >
+    <div style={{
+      padding: '2rem',
+      fontFamily: 'sans-serif',
+      background: '#fffbea',
+      minHeight: '100vh',
+      width: '100vw',
+      maxWidth: '100vw',
+      boxSizing: 'border-box',
+    }}>
       {user && (
         <div style={{ textAlign: 'right', marginBottom: '1rem' }}>
           <button
@@ -235,7 +258,7 @@ export default function MainApp({ user, onSignOut }) {
             min="1"
             max="100"
             value={score}
-            onChange={(e) => setScore(Number(e.target.value))}
+            onChange={(e) => setScore(e.target.value)}
             style={{ marginRight: '1rem', padding: '0.5rem', width: '80px' }}
           />
           <button
@@ -266,34 +289,29 @@ export default function MainApp({ user, onSignOut }) {
         </div>
       )}
 
-      <ul
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-          gap: '1rem',
-          padding: 0,
-          listStyle: 'none'
-        }}
-      >
+      <ul style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+        gap: '1rem',
+        padding: 0,
+        listStyle: 'none'
+      }}>
         {items.map((i) => (
-          <li
-            key={i.id}
-            style={{
-              background: 'white',
-              borderRadius: '10px',
-              padding: '1rem',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
-              textAlign: 'center',
-              cursor: 'pointer',
-              position: 'relative'
-            }}
-          >
+          <li key={i.id} style={{
+            background: 'white',
+            borderRadius: '10px',
+            padding: '1rem',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+            textAlign: 'center',
+            cursor: 'pointer',
+            position: 'relative'
+          }}>
             {i.image_url ? (
               <img
                 src={i.image_url}
                 alt={i.name}
                 style={{ width: '100%', height: '150px', objectFit: 'cover', borderRadius: '6px', marginBottom: '0.5rem' }}
-                onClick={() => setSelectedItem(i)}
+                onClick={() => handleSelectItem(i)}
               />
             ) : (
               <div style={{ marginBottom: '0.5rem' }}>
@@ -322,7 +340,7 @@ export default function MainApp({ user, onSignOut }) {
             )}
 
             <strong
-              onClick={() => setSelectedItem(i)}
+              onClick={() => handleSelectItem(i)}
               style={{
                 userSelect: 'none',
                 fontSize: '1.1rem',
