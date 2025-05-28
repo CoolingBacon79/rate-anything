@@ -123,17 +123,14 @@ export default function MainApp({ user, onSignOut, onSignIn }) {
         const { data: urlData } = supabase
           .storage.from('item-images').getPublicUrl(fileName)
         imageUrl = urlData.publicUrl
-      } else {
-        console.error(upErr)
-      }
+      } else console.error(upErr)
     }
     const { error } = await supabase
       .from('items')
       .insert([{ name:newItemName, image_url:imageUrl, category:newItemCategory }])
     setLoading(false)
-    if (error) {
-      console.error('addItem error:', error)
-    } else {
+    if (error) console.error('addItem error:', error)
+    else {
       setNewItemName('')
       setNewItemImage(null)
       setNewItemCategory(CATEGORIES[1])
@@ -172,7 +169,7 @@ export default function MainApp({ user, onSignOut, onSignIn }) {
           {SORT_OPTIONS.map(opt => (
             <button
               key={opt.key}
-              onClick={() => setSortOption(opt.key)}
+              onClick={() => setSortOption(opt.key)} 
               style={buttonStyle(sortOption === opt.key)}
             >
               {opt.label}
@@ -251,9 +248,46 @@ export default function MainApp({ user, onSignOut, onSignIn }) {
       </ul>
 
       {showAuthModal && (
-        <div className="modal-backdrop">
-          <div className="modal">
-            <button className="modal-close" onClick={() => setShowAuthModal(false)}>×</button>
+        <div
+          className="modal-backdrop"
+          style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000
+          }}
+        >
+          <div
+            className="modal"
+            style={{
+              position: 'relative',
+              background: '#fff',
+              padding: '1rem 2rem 2rem', // less top padding so X sits closer to top border
+              borderRadius: '8px',
+              width: '320px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+            }}
+          >
+            <button
+              onClick={() => setShowAuthModal(false)}
+              aria-label="Close"
+              style={{
+                position: 'absolute',
+                top: '0.25rem',    // very close to top edge
+                right: '0.25rem',  // very close to right edge
+                background: 'transparent',
+                border: 'none',
+                fontSize: '1.5rem',
+                lineHeight: '1',
+                cursor: 'pointer',
+                zIndex: 1001
+              }}
+            >
+              ×
+            </button>
             <Auth
               onUser={u => {
                 onSignIn(u)
