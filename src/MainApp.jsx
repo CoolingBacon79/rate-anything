@@ -1,5 +1,5 @@
 // src/MainApp.jsx
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase } from './supabaseClient'
 import Auth from './Auth'
 import InlineRating from './InlineRating'
@@ -9,13 +9,14 @@ import './index.css'
 // Component to display average score
 function AvgBox({ avg }) {
   const text = avg == null ? '—' : avg
-  const bg = avg == null
-    ? '#ddd'
-    : avg >= 70
+  const bg =
+    avg == null
+      ? '#ddd'
+      : avg >= 70
       ? '#4caf50'
       : avg >= 40
-        ? '#ffc107'
-        : '#f44336'
+      ? '#ffc107'
+      : '#f44336'
   return (
     <div className="avg-box" style={{ backgroundColor: bg }}>
       {text}
@@ -23,16 +24,7 @@ function AvgBox({ avg }) {
   )
 }
 
-const CATEGORIES = [
-  'All',
-  'Movies',
-  'TV-Series',
-  'Food',
-  'Drinks',
-  'Music',
-  'Games',
-  'Other'
-]
+const CATEGORIES = ['All','Movies','TV-Series','Food','Drinks','Music','Games','Other']
 const SORT_OPTIONS = [
   { key: 'recent', label: 'Recently Added' },
   { key: 'highest', label: 'Highest Rating' },
@@ -56,7 +48,7 @@ export default function MainApp({ user, onSignOut, onSignIn }) {
   const fetchItems = useCallback(async () => {
     const { data, error } = await supabase
       .from('items')
-      .select(`id, name, image_url, created_at, category, ratings(user_id, score)`)
+      .select(`id,name,image_url,created_at,category,ratings(user_id,score)`)
     if (error) {
       console.error('fetchItems error:', error)
       return
@@ -65,53 +57,56 @@ export default function MainApp({ user, onSignOut, onSignIn }) {
       const scores = item.ratings.map(r => r.score)
       const count = scores.length
       const average = count
-        ? Math.round(scores.reduce((a, b) => a + b, 0) / count)
+        ? Math.round(scores.reduce((a,b) => a + b, 0) / count)
         : null
       const userRating = user
         ? item.ratings.find(r => r.user_id === user.id)?.score ?? null
         : null
       const variance = count > 1
-        ? Math.round(
-            scores.reduce((sum, s) => sum + (s - average) ** 2, 0) / count
-          )
+        ? Math.round(scores.reduce((sum,s) => sum + (s - average)**2, 0) / count)
         : 0
       return { ...item, average, count, userRating, variance }
     })
     setAllItems(stats)
   }, [user])
 
-  // initial + on user change
   useEffect(() => {
     fetchItems()
   }, [fetchItems])
 
-  // Filter & sort
-  const filtered = allItems.filter(i =>
-    selectedCategory === 'All' ? true : i.category === selectedCategory
+  // 1) Category filter
+  const filteredItems = useMemo(
+    () => allItems.filter(i =>
+      selectedCategory === 'All' ? true : i.category === selectedCategory
+    ),
+    [allItems, selectedCategory]
   )
-  let listToSort = filtered
-  if (sortOption === 'highest' || sortOption === 'lowest') {
-    listToSort = filtered.filter(i => i.count > 0)
-  } else if (sortOption === 'controversial') {
-    listToSort = filtered.filter(i => i.count > 1)
-  }
-  const sorted = editingId
-    ? filtered
-    : [...listToSort].sort((a, b) => {
-        switch (sortOption) {
-          case 'highest':
-            return (b.average || 0) - (a.average || 0)
-          case 'lowest':
-            return (a.average || 0) - (b.average || 0)
-          case 'controversial':
-            return b.variance - a.variance
-          case 'az':
-            return a.name.localeCompare(b.name)
-          case 'recent':
-          default:
-            return new Date(b.created_at) - new Date(a.created_at)
-        }
-      })
+
+  // 2) Pre-filter for rating-based sorts
+  const listToSort = useMemo(() => {
+    if (sortOption === 'highest' || sortOption === 'lowest') {
+      return filteredItems.filter(i => i.count > 0)
+    }
+    if (sortOption === 'controversial') {
+      return filteredItems.filter(i => i.count > 1)
+    }
+    return filteredItems
+  }, [filteredItems, sortOption])
+
+  // 3) Final sort (ignores editingId)
+  const sortedItems = useMemo(
+    () => [...listToSort].sort((a,b) => {
+      switch (sortOption) {
+        case 'highest':      return (b.average||0) - (a.average||0)
+        case 'lowest':       return (a.average||0) - (b.average||0)
+        case 'controversial':return b.variance - a.variance
+        case 'az':           return a.name.localeCompare(b.name)
+        case 'recent':
+        default:             return new Date(b.created_at) - new Date(a.created_at)
+      }
+    }),
+    [listToSort, sortOption]
+  )
 
   // Add new item
   const addItem = async e => {
@@ -123,27 +118,18 @@ export default function MainApp({ user, onSignOut, onSignIn }) {
       const ext = newItemImage.name.split('.').pop()
       const fileName = `${Date.now()}.${ext}`
       const { error: upErr } = await supabase
-        .storage
-        .from('item-images')
-        .upload(fileName, newItemImage, { upsert: true })
+        .storage.from('item-images').upload(fileName, newItemImage, { upsert: true })
       if (!upErr) {
         const { data: urlData } = supabase
-          .storage
-          .from('item-images')
-          .getPublicUrl(fileName)
+          .storage.from('item-images').getPublicUrl(fileName)
         imageUrl = urlData.publicUrl
       } else {
         console.error(upErr)
       }
     }
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('items')
-      .insert([{
-        name: newItemName,
-        image_url: imageUrl,
-        category: newItemCategory
-      }])
-      .select()
+      .insert([{ name:newItemName, image_url:imageUrl, category:newItemCategory }])
     setLoading(false)
     if (error) {
       console.error('addItem error:', error)
@@ -151,7 +137,6 @@ export default function MainApp({ user, onSignOut, onSignIn }) {
       setNewItemName('')
       setNewItemImage(null)
       setNewItemCategory(CATEGORIES[1])
-      // refresh list
       fetchItems()
     }
   }
@@ -162,7 +147,7 @@ export default function MainApp({ user, onSignOut, onSignIn }) {
       .from('ratings')
       .upsert(
         { item_id: itemId, user_id: user.id, score },
-        { onConflict: ['user_id', 'item_id'] }
+        { onConflict:['user_id','item_id'] }
       )
     setEditingId(null)
     fetchItems()
@@ -172,7 +157,7 @@ export default function MainApp({ user, onSignOut, onSignIn }) {
     <div className="main-app">
       <header className="app-header">
         <h1 className="title">🌟 Rate Anything</h1>
-        <div className="controls" style={{ textAlign: 'center', margin: '1rem 0' }}>
+        <div className="controls" style={{ textAlign:'center', margin:'1rem 0' }}>
           {CATEGORIES.map(cat => (
             <button
               key={cat}
@@ -183,7 +168,7 @@ export default function MainApp({ user, onSignOut, onSignIn }) {
             </button>
           ))}
         </div>
-        <div className="controls" style={{ textAlign: 'center', margin: '0.5rem 0' }}>
+        <div className="controls" style={{ textAlign:'center', margin:'0.5rem 0' }}>
           {SORT_OPTIONS.map(opt => (
             <button
               key={opt.key}
@@ -195,24 +180,15 @@ export default function MainApp({ user, onSignOut, onSignIn }) {
           ))}
         </div>
         <div className="auth-controls">
-          {user ? (
-            <button onClick={onSignOut} style={authBtnStyle}>
-              Sign Out
-            </button>
-          ) : (
-            <button onClick={() => setShowAuthModal(true)} style={authBtnStyle}>
-              Sign In
-            </button>
-          )}
+          {user
+            ? <button onClick={onSignOut} style={authBtnStyle}>Sign Out</button>
+            : <button onClick={() => setShowAuthModal(true)} style={authBtnStyle}>Sign In</button>
+          }
         </div>
       </header>
 
       {user && (
-        <form
-          className="add-item-form"
-          onSubmit={addItem}
-          style={{ margin: '1rem 0', display: 'flex', gap: '0.5rem' }}
-        >
+        <form className="add-item-form" onSubmit={addItem} style={{ margin:'1rem 0', display:'flex', gap:'0.5rem' }}>
           <input
             value={newItemName}
             onChange={e => setNewItemName(e.target.value)}
@@ -238,7 +214,7 @@ export default function MainApp({ user, onSignOut, onSignIn }) {
       )}
 
       <ul className="item-grid">
-        {sorted.map(item => (
+        {sortedItems.map(item => (
           <li key={item.id} className="item-card">
             {item.image_url ? (
               <img src={item.image_url} alt={item.name} />
@@ -246,9 +222,7 @@ export default function MainApp({ user, onSignOut, onSignIn }) {
               user && (
                 <ImageUploader
                   itemId={item.id}
-                  onComplete={(id, url) => {
-                    fetchItems()
-                  }}
+                  onComplete={() => fetchItems()}
                 />
               )
             )}
@@ -265,9 +239,7 @@ export default function MainApp({ user, onSignOut, onSignIn }) {
             ) : (
               <div
                 className="you-box"
-                onClick={() =>
-                  !user ? setShowAuthModal(true) : setEditingId(item.id)
-                }
+                onClick={() => !user ? setShowAuthModal(true) : setEditingId(item.id)}
               >
                 {item.userRating ?? 'Rate'}
               </div>
@@ -281,12 +253,7 @@ export default function MainApp({ user, onSignOut, onSignIn }) {
       {showAuthModal && (
         <div className="modal-backdrop">
           <div className="modal">
-            <button
-              className="modal-close"
-              onClick={() => setShowAuthModal(false)}
-            >
-              ×
-            </button>
+            <button className="modal-close" onClick={() => setShowAuthModal(false)}>×</button>
             <Auth
               onUser={u => {
                 onSignIn(u)

@@ -187,6 +187,7 @@ html, body, #root {
   background: #fff;
   border: 1px solid #ccc;
   border-radius: 6px;
+    color: #000;  
 }
 .inline-edit button {
   margin-left: 0.5rem;
@@ -205,6 +206,7 @@ html, body, #root {
   width: 50px;
   margin: 0.5rem auto 0;
   cursor: pointer;
+    color: #000; 
 }
 
 /* Ratings count */
@@ -276,5 +278,11 @@ html, body, #root {
   .add-item-form input,
   .add-item-form button {
     width: 100%;
+  }
+}
+@media (max-width: 600px) {
+  .you-box,
+  .inline-edit input {
+    color: #000 !important;
   }
 }
