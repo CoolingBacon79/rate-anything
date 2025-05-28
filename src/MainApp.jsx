@@ -1,16 +1,18 @@
 // src/MainApp.jsx
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
+import Auth from './Auth'
 import './index.css'
 
-export default function MainApp({ user, onSignOut }) {
-  const [items, setItems]         = useState([])
-  const [newItemName, setNewItemName]   = useState('')
+export default function MainApp({ user, onSignOut, onSignIn }) {
+  const [items, setItems] = useState([])
+  const [newItemName, setNewItemName] = useState('')
   const [newItemImage, setNewItemImage] = useState(null)
-  const [loading, setLoading]     = useState(false)
+  const [loading, setLoading] = useState(false)
   const [inlineScores, setInlineScores] = useState({})
   const [editingId, setEditingId] = useState(null)
   const [uploadingId, setUploadingId] = useState(null)
+  const [showAuthModal, setShowAuthModal] = useState(false)
 
   useEffect(() => {
     loadItems()
@@ -19,7 +21,7 @@ export default function MainApp({ user, onSignOut }) {
   async function loadItems() {
     const { data, error } = await supabase
       .from('items')
-      .select(`id, name, image_url, ratings(user_id, score)`)
+      .select(`id, name, image_url, ratings(user_id, score)`)  
       .order('created_at', { ascending: false })
     if (error) return console.error(error.message)
 
@@ -35,7 +37,9 @@ export default function MainApp({ user, onSignOut }) {
 
     setItems(stats)
     const init = {}
-    stats.forEach(i => { if (i.userRating!=null) init[i.id] = i.userRating.toString() })
+    stats.forEach(i => {
+      if (i.userRating != null) init[i.id] = i.userRating.toString()
+    })
     setInlineScores(init)
   }
 
@@ -51,8 +55,7 @@ export default function MainApp({ user, onSignOut }) {
       const { error: upErr } = await supabase
         .storage.from('item-images').upload(fileName, newItemImage)
       if (!upErr) {
-        const { data } = supabase
-          .storage.from('item-images').getPublicUrl(fileName)
+        const { data } = supabase.storage.from('item-images').getPublicUrl(fileName)
         imageUrl = data.publicUrl
       } else console.error(upErr.message)
     }
@@ -86,18 +89,20 @@ export default function MainApp({ user, onSignOut }) {
       .storage.from('item-images').upload(fileName, file)
     if (!upErr) {
       const { data } = supabase.storage.from('item-images').getPublicUrl(fileName)
-      const { error: updateErr } = await supabase
+      await supabase
         .from('items')
         .update({ image_url: data.publicUrl })
         .eq('id', itemId)
-      if (updateErr) console.error(updateErr.message)
-      else await loadItems()
+      await loadItems()
     } else console.error(upErr.message)
     setUploadingId(null)
   }
 
   const startEdit = id => {
-    if (!user) return alert('Logga in för att ge betyg.')
+    if (!user) {
+      setShowAuthModal(true)
+      return
+    }
     setEditingId(id)
   }
 
@@ -124,34 +129,62 @@ export default function MainApp({ user, onSignOut }) {
   }
 
   const AvgBox = ({ avg }) => {
-  const text = avg == null ? '—' : avg
-  let bg = '#ddd'
-  if (avg != null) {
-    bg = avg >= 70
-      ? '#4caf50'
-      : avg >= 40
-        ? '#ffc107'
-        : '#f44336'
+    const text = avg == null ? '—' : avg
+    let bg = '#ddd'
+    if (avg != null) {
+      bg = avg >= 70
+        ? '#4caf50'
+        : avg >= 40
+          ? '#ffc107'
+          : '#f44336'
+    }
+    return (
+      <div className="avg-box" style={{ backgroundColor: bg }}>
+        {text}
+      </div>
+    )
   }
-  return (
-    <div
-      className="avg-box"
-      style={{ backgroundColor: bg }}   // <-- override CSS bg here
-    >
-      {text}
-    </div>
-  )
-}
 
   return (
     <div className="main-app">
-      {user && (
-        <div className="sign-out">
-          <button onClick={onSignOut}>Sign Out</button>
+      <header className="app-header" style={{ position: 'relative' }}>
+        <h1 className="title">🌟 Rate Anything</h1>
+        <div className="auth-controls">
+          {user ? (
+            <button
+              onClick={onSignOut}
+              style={{
+                backgroundColor: '#ffc107',
+                position: 'absolute',
+                top: '1rem',
+                right: '1rem',
+                padding: '0.5rem 1rem',
+                border: 'none',
+                borderRadius: '0.25rem',
+                cursor: 'pointer'
+              }}
+            >
+              Sign Out
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowAuthModal(true)}
+              style={{
+                backgroundColor: '#ffc107',
+                position: 'absolute',
+                top: '1rem',
+                right: '1rem',
+                padding: '0.5rem 1rem',
+                border: 'none',
+                borderRadius: '0.25rem',
+                cursor: 'pointer'
+              }}
+            >
+              Sign In
+            </button>
+          )}
         </div>
-      )}
-
-      <h1 className="title">🌟 Rate Anything</h1>
+      </header>
 
       {user && (
         <form className="add-item-form" onSubmit={addItem}>
@@ -177,49 +210,56 @@ export default function MainApp({ user, onSignOut }) {
             {item.image_url ? (
               <img src={item.image_url} alt={item.name} />
             ) : (
-              <div className="placeholder">
-                <label htmlFor={`upload-${item.id}`}>
-                  {uploadingId===item.id ? 'Uploading…' : 'Add Image'}
-                </label>
-                <input
-                  id={`upload-${item.id}`}
-                  type="file"
-                  accept="image/*"
-                  disabled={uploadingId===item.id}
-                  onChange={e=>uploadImageForItem(item.id,e.target.files[0])}
-                />
-              </div>
+              user && (
+                <div className="placeholder">
+                  <label htmlFor={`upload-${item.id}`}>{uploadingId===item.id ? 'Uploading…' : 'Add Image'}</label>
+                  <input
+                    id={`upload-${item.id}`}
+                    type="file"
+                    accept="image/*"
+                    disabled={uploadingId===item.id}
+                    onChange={e=>uploadImageForItem(item.id,e.target.files[0])}
+                  />
+                </div>
+              )
             )}
 
             <strong className="item-name">{item.name}</strong>
-
             <AvgBox avg={item.average} />
 
-            {user && (
-              editingId === item.id ? (
-                <div className="inline-edit">
-                  <input
-                    type="number"
-                    min="0" max="100"
-                    value={inlineScores[item.id]||''}
-                    onChange={e=>setInlineScores(s=>({...s,[item.id]:e.target.value}))}
-                  />
-                  <button onClick={()=>submitRating(item.id)}>Submit</button>
-                </div>
-              ) : (
-                <div
-                  className="you-box"
-                  onClick={()=>startEdit(item.id)}
-                >
-                  {item.userRating!=null ? item.userRating : 'You'}
-                </div>
-              )
+            {editingId === item.id ? (
+              <div className="inline-edit">
+                <input
+                  type="number" min="0" max="100"
+                  value={inlineScores[item.id] || ''}
+                  onChange={e => setInlineScores(s => ({ ...s, [item.id]: e.target.value }))}
+                />
+                <button onClick={() => submitRating(item.id)}>Submit</button>
+              </div>
+            ) : (
+              <div
+                className="you-box"
+                onClick={() => !user ? setShowAuthModal(true) : startEdit(item.id)}
+              >
+                {user
+                  ? (item.userRating != null ? item.userRating : 'Rate')
+                  : 'Rate'}
+              </div>
             )}
 
             <div className="count">{item.count} ratings</div>
           </li>
         ))}
       </ul>
+
+      {showAuthModal && (
+        <div className="modal-backdrop">
+          <div className="modal">
+            <button className="modal-close" onClick={() => setShowAuthModal(false)}>×</button>
+            <Auth onUser={u => { onSignIn(u); if (u) setShowAuthModal(false); }} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
