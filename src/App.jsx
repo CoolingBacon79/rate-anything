@@ -19,6 +19,11 @@ export default function App() {
 
     return () => listener.subscription?.unsubscribe()
   }, [])
+supabase.auth.getSession().then(({ data: { session } }) => {
+  console.log('🔐 production session:', session)
+  setUser(session?.user ?? null)
+  setLoading(false)
+})
 
   const signOut = async () => {
     const { error } = await supabase.auth.signOut()
